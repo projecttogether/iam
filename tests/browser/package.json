@@ -1,0 +1,8 @@
+{
+  "name": "iam-browser-checks",
+  "private": true,
+  "description": "Playwright for the end-to-end check against a real Keycloak; see CONTRIBUTING.md.",
+  "devDependencies": {
+    "playwright": "1.65.1"
+  }
+}

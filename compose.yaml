@@ -1,0 +1,100 @@
+# Production on a Linux server (Debian, Ubuntu) with Docker Compose: the image
+# as two processes, the web app (`web`: the interface and the API) and the
+# worker (`worker`: jobs, the schedule and the reads from connected apps),
+# after a one-off migration. Settings live in .env next to this file
+# (docs/configuration.md). Start it with:
+#
+#   docker compose up -d --pull always
+#
+# IAM_IMAGE_TAG in .env selects the image of ghcr.io/projecttogether/iam:
+# latest (the newest commit on main, the default) or sha-<commit> for one
+# build. To upgrade, run the same command again: it pulls the newer image.
+#
+# PostgreSQL runs separately (a managed database or a server of your own), or
+# next to the app with compose.postgres.yaml
+# (COMPOSE_FILE=compose.yaml:compose.postgres.yaml in .env); set DATABASE_URL
+# to it and back it up. The app keeps everything in the database.
+#
+# `web` listens on 127.0.0.1:8000 (IAM_PORT changes the host port), for a
+# reverse proxy on the same server, such as Caddy, that terminates HTTPS; set
+# APP_URL to its public https URL. Local development uses compose.dev.yaml.
+
+x-image: &image ghcr.io/projecttogether/iam:${IAM_IMAGE_TAG:-latest}
+
+# Every variable in .env reaches the containers (docs/configuration.md); the
+# required ones are checked here so a missing value stops the start.
+x-app-environment: &app-environment
+  DATABASE_URL: ${DATABASE_URL:?Set the PostgreSQL URL}
+  APP_URL: ${APP_URL:?Set APP_URL, the public https URL}
+  # Signs sessions: at least 32 random characters.
+  AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET}
+  # Encrypts the connection secrets in the database (docs/configuration.md).
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set a Fernet key (docs/configuration.md)}
+  # Sign-in: OIDC_ISSUER for any OpenID Connect provider, or KEYCLOAK_URL and
+  # KEYCLOAK_REALM (docs/authentication.md).
+  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:?Set the sign-in client ID}
+  OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set the sign-in client secret}
+  # Dates, start and end days, and the schedule follow this time zone.
+  TZ: ${TZ:-UTC}
+
+x-app: &app
+  image: *image
+  restart: unless-stopped
+  mem_limit: 512m
+  env_file:
+    - path: .env
+      required: false
+  environment: *app-environment
+
+services:
+  # One-off job before web and worker start.
+  migrate:
+    <<: *app
+    command: ["migrate"]
+    restart: "no"
+
+  web:
+    <<: *app
+    command: ["web"]
+    ports:
+      # Only on the server itself, for the reverse proxy. IAM_PORT picks
+      # another host port when 8000 is taken, e.g. by another app.
+      - "127.0.0.1:${IAM_PORT:-8000}:8000"
+    # A stop (an upgrade) lets running requests finish, and the emails they
+    # send afterwards (docs/architecture.md, Restarts and deploys).
+    stop_grace_period: 40s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8000/-/healthz',{signal:AbortSignal.timeout(3000)}).then((r)=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 30s
+      start_period: 30s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    <<: *app
+    command: ["worker"]
+    # On SIGTERM the worker finishes the job it is running. Killed midway, the
+    # job runs again after JOB_LEASE_SECONDS.
+    stop_grace_period: 2m
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # The worker's watchdog touches this file while the worker gets anywhere,
+      # and ends a stuck worker, which the restart policy then starts again.
+      test:
+        - CMD
+        - node
+        - -e
+        - "process.exit(Date.now()-require('fs').statSync('/tmp/iam-worker-alive').mtimeMs>60000?1:0)"
+      interval: 30s
+      start_period: 60s
+      timeout: 5s
+      retries: 3
