@@ -1,0 +1,40 @@
+# Adds a PostgreSQL 18 next to the application, for servers without a database
+# of their own. In .env, with the same `openssl rand -hex 32` value in both places:
+#   COMPOSE_FILE=compose.yaml:compose.postgres.yaml
+#   POSTGRES_PASSWORD=REPLACE_WITH_RANDOM_HEX_PASSWORD
+#   DATABASE_URL=postgresql://iam:REPLACE_WITH_RANDOM_HEX_PASSWORD@postgres:5432/iam
+# Back up the database (docs/deployment.md, Backups).
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: iam
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: iam
+    volumes:
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U iam -d iam"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres:

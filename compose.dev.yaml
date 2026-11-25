@@ -1,0 +1,56 @@
+# Local development: PostgreSQL, a Keycloak with a ready realm, and Mailpit.
+# The app runs on the host (CONTRIBUTING.md):
+#   docker compose -f compose.dev.yaml up -d
+#   cp .env.example .env && npm ci && npm run db:migrate && npm run dev
+# Keycloak: http://localhost:8098 (admin/admin; realm "iam", user admin@example.invalid / admin)
+# Mailpit:  http://localhost:8027 (SMTP on 1027)
+# The DEV_*_PORT variables move the ports when another stack uses them.
+name: iam-dev
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: iam
+      POSTGRES_USER: iam
+      POSTGRES_PASSWORD: iam
+    ports:
+      - "127.0.0.1:${DEV_POSTGRES_PORT:-55438}:5432"
+    volumes:
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "iam"]
+      interval: 5s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2-3
+    command: ["start-dev", "--import-realm", "--http-port=${DEV_KEYCLOAK_PORT:-8098}"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # The image sizes the heap from host RAM (up to 70 %); cap it for local use.
+      JAVA_OPTS_KC_HEAP: "-Xms64m -Xmx512m"
+      KC_HOSTNAME: http://localhost:${DEV_KEYCLOAK_PORT:-8098}
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "127.0.0.1:${DEV_KEYCLOAK_PORT:-8098}:${DEV_KEYCLOAK_PORT:-8098}"
+    volumes:
+      - ./dev/keycloak:/opt/keycloak/data/import:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3",
+        ]
+      interval: 5s
+      retries: 60
+
+  mailpit:
+    image: axllent/mailpit:v1.33
+    ports:
+      - "127.0.0.1:${DEV_SMTP_PORT:-1027}:1025"
+      - "127.0.0.1:${DEV_MAILPIT_PORT:-8027}:8025"
+
+volumes:
+  postgres:

@@ -1,0 +1,18 @@
+# Gitleaks (the CI job "Secrets in the history"): its default rules, without
+# the invented values of this repository. Each is an example or test value,
+# never valid where the app is in use.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Example and test values"
+regexes = [
+  # The CI job's ENCRYPTION_KEY (.github/workflows/ci.yaml).
+  '''^Y2ktb25seS1ub3QtYS1zZWNyZXQta2V5LTAwMDAwMDA=$''',
+  # The test key that encrypted the secrets of the Django fixture
+  # (config.test.ts, db/django.int.test.ts, db/fixtures/django-0.2.sql).
+  '''^zIi4BBQnf3ojuqE3UQQ1yUmP0zpMlTv44ATyCo-nt9E=$''',
+  # A Fernet key and token made with Python's cryptography (core/crypto.test.ts).
+  '''^-_jk8sgrDng2BPvt--55QUpymy0eDpTXuOJZ3JniyM8=$''',
+  '''^gAAAAABrAJa6pI4HhAwARTORpj2qDCeiJfkLWwvk4TvqQVmSfE_eXH7mDS32UYcLEAwedybsFFyJ4DRyU6zKofbJv0MDwZCCbKKabSjWZ-5-t_CX85B4GUY=$''',
+]
