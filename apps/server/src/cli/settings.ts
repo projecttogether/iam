@@ -238,7 +238,7 @@ async function read(verb: "import-groups" | "sync", id: number, command: string,
         : compareAccounts(connection, actor),
   );
   if (run === null)
-    throw new AppError(409, "busy", "The worker is reading a connection. Try again in a minute.");
+    throw new AppError(409, "busy", "Another connection read is running. Try again in a minute.");
   const answer = runAnswer(run);
   io.out(json(answer));
   if (answer.ok) return 0;

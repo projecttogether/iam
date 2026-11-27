@@ -333,14 +333,14 @@ describe("cli settings and cli tokens", () => {
     STORE.failWith = null;
     expect((await settings(["sync", "app"])).code).toBe(2);
 
-    // While the worker reads (and may close stopped runs), the command waits its turn.
+    // While another read holds the lock (the worker may close stopped runs), the command waits its turn.
     const runs = (await getDb().select().from(syncRuns)).length;
     const busy = await exclusive(SYNC_LOCK_ID, () =>
       settings(["sync", "connections", "--id", String(connection.id)]),
     );
     expect(busy).toMatchObject({
       code: 1,
-      err: "The worker is reading a connection. Try again in a minute.\n",
+      err: "Another connection read is running. Try again in a minute.\n",
     });
     expect(await getDb().select().from(syncRuns)).toHaveLength(runs);
   });
