@@ -29,7 +29,7 @@ import { atomic, q } from "../db/tx";
 import type { AppEnv } from "../http/env";
 import { idParam, jsonBody, requireRole } from "../http/middleware";
 import { AppError, notFound, validationError } from "../http/errors";
-import { record } from "../engine/audit";
+import { isOperator, record, type Operator } from "../engine/audit";
 import {
   archivePerson,
   canArchive,
@@ -127,7 +127,10 @@ router.get("/people/options", async (c) => {
   return c.json(body);
 });
 
-async function personOr404(id: number): Promise<Person> {
+/** Who adds or edits a person: an app user, or the operator (`cli people`, with an admin's rights). */
+type Actor = User | Operator;
+
+export async function personOr404(id: number): Promise<Person> {
   const [person] = await q().select().from(people).where(eq(people.id, id));
   if (!person) throw notFound();
   return person;
@@ -282,7 +285,7 @@ const FIELD_NAMES: Record<string, string> = {
 };
 
 /** Adds a person from the checked values of the form, and audits it. */
-export async function addPerson(values: Values, actor: User): Promise<Person> {
+export async function addPerson(values: Values, actor: Actor): Promise<Person> {
   return atomic(async () => {
     const [created] = await q().insert(people).values(values).returning();
     await record("person.created", `Added ${fullName(created!)}`, {
@@ -301,11 +304,15 @@ router.post("/people", async (c) => {
   return c.json({ id: person.id, message: `Added ${fullName(person)}.` }, 201);
 });
 
-router.put("/people/:id", async (c) => {
-  const user = requireRole(c, "approver");
-  const id = idParam(c);
-  await personOr404(id);
-  const input = await jsonBody(c, personInputSchema);
+/**
+ * Saves the edit form of an existing person and audits it. Returns the
+ * page's message, and whether access changed (an access update applies it).
+ */
+export async function updatePerson(
+  id: number,
+  input: ReturnType<typeof personInputSchema.parse>,
+  actor: Actor,
+): Promise<{ message: string; info: boolean }> {
   const result = await atomic(async () => {
     // The form saves the whole row: the lock keeps it from writing back a
     // status a workflow changed meanwhile.
@@ -318,7 +325,8 @@ router.put("/people/:id", async (c) => {
       (key) => (person[key as keyof Person] ?? null) !== (submitted[key as keyof Values] ?? null),
     );
     // Changing the last day can cause the worker to turn off the linked app user.
-    if (changed.includes("endDate") && (await higherRoleAppUser(person, user))) {
+    // The operator has an admin's rights, and no app user has a higher role.
+    if (changed.includes("endDate") && !isOperator(actor) && (await higherRoleAppUser(person, actor))) {
       throw validationError({ endDate: "Only an admin can change this person's last day." });
     }
     const update: Partial<Person> = { ...values };
@@ -326,7 +334,7 @@ router.put("/people/:id", async (c) => {
     await q().update(people).set(update).where(eq(people.id, id));
     const saved = { ...person, ...update };
     await record("person.updated", `Edited ${fullName(saved)}`, {
-      actor: user,
+      actor,
       personId: id,
       target: { type: "person", id },
       details: { fields: changed.map((key) => FIELD_NAMES[key]!).sort() },
@@ -339,7 +347,15 @@ router.put("/people/:id", async (c) => {
     messages.push("Access changed. Start an access update to apply it in the connected apps.");
   }
   messages.push(`Saved ${fullName(result.saved)}.`);
-  return c.json({ id, message: messages.join(" "), info: accessChanged });
+  return { message: messages.join(" "), info: accessChanged };
+}
+
+router.put("/people/:id", async (c) => {
+  const user = requireRole(c, "approver");
+  const id = idParam(c);
+  await personOr404(id);
+  const input = await jsonBody(c, personInputSchema);
+  return c.json({ id, ...(await updatePerson(id, input, user)) });
 });
 
 router.post("/people/:id/start/:kind", async (c) => {

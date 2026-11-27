@@ -5,7 +5,9 @@ import { adapterClasses, getAdapterClass } from "../adapters/registry";
 import { appSettings, connections, type Connection } from "../db/schema";
 import { q } from "../db/tx";
 import { operator } from "../engine/audit";
-import { adapterClassOf } from "../engine/connections";
+import { adapterClassOf, kindOf } from "../engine/connections";
+import { exclusive, SYNC_LOCK_ID } from "../engine/schedule";
+import { compareAccounts, importGroups, importPeople } from "../engine/sync";
 import { AppError, parseWith } from "../http/errors";
 import {
   adapterInfo,
@@ -16,6 +18,7 @@ import {
   deleteConnection,
   editableConnection,
   newConnectionSchema,
+  runAnswer,
   savedSecrets,
   testConnection,
   updateConnection,
@@ -217,6 +220,32 @@ async function test(id: number, command: string, io: Io): Promise<number> {
   return 1;
 }
 
+/**
+ * The "Import groups" button, or "Compare accounts now" ("Import people now"
+ * for an HR system): the result on stdout; exit 1 when the read fails. The
+ * read holds the schedule's read lock: its run, which names no app user,
+ * looks like a scheduled one, and the worker closes such runs as stopped
+ * only while it holds that lock.
+ */
+async function read(verb: "import-groups" | "sync", id: number, command: string, io: Io): Promise<number> {
+  const connection = await found(`No connection has the ID ${id}.`, () => connectionOr404(id));
+  const actor = operator(command);
+  const run = await exclusive(SYNC_LOCK_ID, () =>
+    verb === "import-groups"
+      ? importGroups(connection, actor)
+      : kindOf(connection) === AdapterKind.HR_SOURCE
+        ? importPeople(connection, actor)
+        : compareAccounts(connection, actor),
+  );
+  if (run === null)
+    throw new AppError(409, "busy", "Another connection read is running. Try again in a minute.");
+  const answer = runAnswer(run);
+  io.out(json(answer));
+  if (answer.ok) return 0;
+  io.err(`${answer.message}\n`);
+  return 1;
+}
+
 export function runSettings(args: string[], io: Io): Promise<number> {
   return run(io, async () => {
     const [verb, ...rest] = args;
@@ -232,22 +261,25 @@ export function runSettings(args: string[], io: Io): Promise<number> {
       }
       case "apply":
       case "remove":
-      case "test": {
+      case "test":
+      case "import-groups":
+      case "sync": {
         const parsed = parseArgs(rest, { positionals: 1, options: ["--id"] });
         const name = settingName(parsed.positionals[0]);
-        if (verb !== "apply") onlyConnections(name, verb === "remove" ? "entries to remove" : "test");
+        if (verb !== "apply") onlyConnections(name, verb === "remove" ? "entries to remove" : verb);
         const id = idOption(parsed, verb !== "apply");
         // The audit log names the command; an ID is no secret.
         const command = `cli settings ${verb} ${name}${id === undefined ? "" : ` --id ${id}`}`;
         if (verb === "apply") return apply(name, id, command, io);
         if (verb === "remove") return remove(id!, command, io);
-        return test(id!, command, io);
+        if (verb === "test") return test(id!, command, io);
+        return read(verb, id!, command, io);
       }
       default:
         throw new UsageError(
           verb === undefined
-            ? "Name a command: list, show, apply, remove or test."
-            : "Unknown command (not shown). Commands: list, show, apply, remove, test.",
+            ? "Name a command: list, show, apply, remove, test, import-groups or sync."
+            : "Unknown command (not shown). Commands: list, show, apply, remove, test, import-groups, sync.",
         );
     }
   });

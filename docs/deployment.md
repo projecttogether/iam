@@ -160,10 +160,11 @@ Connections, Admin › Settings and API keys can also be set on the server
 ## Settings from the command line
 
 Everything an admin sets in **Admin › Connections**, **Admin › Settings**
-and **Admin › API keys** can also be set on the server, without a browser,
-by an operator or by AI with access to the server. The command runs the
-same code as the admin pages: the same checks, the same encryption, the
-same audit log, where it appears as `operator` with the command.
+and **Admin › API keys**, the teams, the access profiles and the people
+can also be set on the server, without a browser, by an operator or by AI
+with access to the server. The command runs the same code as the pages:
+the same checks, the same encryption, the same audit log, where it appears
+as `operator` with the command. The operator has an admin's rights.
 
 ```sh
 docker compose run --rm -T migrate cli settings list
@@ -184,9 +185,25 @@ settings list`. `cli help` lists every command.
 | `cli settings apply connections --id <id>` | Saves a connection, as its edit form does. |
 | `cli settings remove connections --id <id>` | Deletes a connection that has no jobs and no access profile. |
 | `cli settings test connections --id <id>` | The "Test connection" button. |
+| `cli settings import-groups connections --id <id>` | The "Import groups" button. |
+| `cli settings sync connections --id <id>` | "Compare accounts now", or "Import people now" for an HR system. |
 | `cli tokens create api-key --name <name>` | A new API key for another app ([api.md](api.md)): printed once, alone on stdout. Run it with `docker compose exec` ([API keys](#api-keys)). |
 | `cli tokens list [--json]` | The API keys: name, first characters, created, last used, revoked. |
 | `cli tokens revoke <id>` | Revokes an API key. |
+| `cli groups list [--json]` | The groups teams and access profiles can grant, by connection, with their IDs. Import a connection's groups first. |
+| `cli teams list [--json]` | The teams: ID, name, members, groups. |
+| `cli teams show --id <id>` | A team's edit form as JSON (`name`, `description`, `groupIds`): the body for `apply`, with the groups' names to read. |
+| `cli teams apply [--id <id>]` | Saves a team from the body on stdin; without `--id`, adds one. |
+| `cli teams remove --id <id>` | Deletes a team. |
+| `cli profiles list [--json]` | The access profiles: ID, name, people, connections, default for. |
+| `cli profiles show --id <id>` | A profile's edit form as JSON (`name`, `description`, `defaultFor`, `grants` with `connectionId` and `groupIds`). |
+| `cli profiles apply [--id <id>]` | Saves an access profile from the body on stdin; without `--id`, adds one. |
+| `cli profiles remove --id <id>` | Deletes an access profile that nobody has. |
+| `cli people …` | Print personal data: run them with `docker compose exec -T web cli people …`, since Docker keeps what `run` prints in its log. |
+| `cli people list [--json]` | Everyone not archived: ID, name, work email, person type, status, team, access profile. |
+| `cli people show --id <id>` | A person's edit form as JSON: the body for `apply --id`. |
+| `cli people apply [--id <id>]` | Saves a person from the body on stdin; without `--id`, adds one. An empty `accessProfileId` takes the default profile of the person type. |
+| `cli people start <kind> --id <id>` | Starts `onboarding`, `access_update` or `offboarding`, as the person's page does. |
 
 Exit codes: 0 done; 1 the app refuses, with the admin page's message on
 stderr; 2 a wrong command, or a body that is not JSON. After `apply`, the

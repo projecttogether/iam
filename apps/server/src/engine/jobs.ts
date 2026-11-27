@@ -43,7 +43,7 @@ import { atomic, onCommit, q } from "../db/tx";
 import { logger } from "../logger";
 import { reportError } from "../error-reporting";
 import * as accountsLedger from "./accounts";
-import { record } from "./audit";
+import { record, userIdOf, type Operator } from "./audit";
 import { adapterClassOf, buildAdapter, writesAutomatically } from "./connections";
 import { maskEmail, notifyTasks, sendEmail } from "./email";
 import { fullName, loginName } from "./people";
@@ -91,7 +91,8 @@ export function backoffMs(attempts: number): number {
 /** A job with its connection and person, as loaded for a change. */
 export type JobState = Job & { connection: Connection; person: Person };
 
-type Actor = Pick<User, "id" | "email"> | null;
+/** An app user, the operator (`cli`), or nobody: the worker or the schedule. */
+type Actor = Pick<User, "id" | "email"> | Operator | null;
 
 const target = (job: Pick<Job, "id">) => ({ type: "job", id: job.id });
 const actionLabel = (job: Pick<Job, "action">) => JOB_ACTION_LABELS[job.action];
@@ -482,7 +483,7 @@ async function closeTasks(
     .set({
       status,
       completedAt: new Date(),
-      completedById: options.actor?.id ?? null,
+      completedById: userIdOf(options.actor),
       note: (options.note ?? "").slice(0, 2000),
     })
     .where(inArray(tasks.id, ids));

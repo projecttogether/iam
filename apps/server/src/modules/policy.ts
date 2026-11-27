@@ -20,21 +20,29 @@ import {
   teamGroups,
   teams,
   type ProviderGroup,
+  type User,
 } from "../db/schema";
 import { atomic, q } from "../db/tx";
 import type { AppEnv } from "../http/env";
 import { idParam, jsonBody, requireRole } from "../http/middleware";
 import { AppError, notFound, validationError } from "../http/errors";
-import { record } from "../engine/audit";
+import { record, type Operator } from "../engine/audit";
 import { adapterClassOf, isProvisioning, supportsGroups } from "../engine/connections";
 import { fullName } from "../engine/people";
 import { groupLabel } from "../engine/policy";
 
-/** Teams and access profiles: the policy that decides desired access. */
+/**
+ * Teams and access profiles: the policy that decides desired access. The
+ * routes and the operator commands (`cli teams`, `cli profiles`, `cli
+ * groups`) call the same functions.
+ */
 const router = new Hono<AppEnv>();
 
+/** Who saves a team or profile: an admin, or the operator. */
+type Actor = Pick<User, "id" | "email"> | Operator;
+
 /** Account connections with their selectable groups. */
-async function groupConnections(): Promise<GroupConnection[]> {
+export async function groupConnections(): Promise<GroupConnection[]> {
   const rows = (await q().select().from(connections).orderBy(asc(connections.name))).filter(isProvisioning);
   const groups =
     rows.length === 0
@@ -91,8 +99,7 @@ const labelsOf = async (rows: { connectionId: number; group: ProviderGroup }[]) 
 
 // -- teams --------------------------------------------------------------------------
 
-router.get("/teams", async (c) => {
-  requireRole(c, "viewer");
+export async function teamList(): Promise<TeamRow[]> {
   const rows = await q()
     .select({
       team: teams,
@@ -116,15 +123,16 @@ router.get("/teams", async (c) => {
       groups: await labelsOf(own.map((row) => ({ connectionId: row.group.connectionId, group: row.group }))),
     });
   }
-  return c.json(body);
+  return body;
+}
+
+router.get("/teams", async (c) => {
+  requireRole(c, "viewer");
+  return c.json(await teamList());
 });
 
-router.get("/teams/:id", async (c) => {
-  requireRole(c, "viewer");
-  const [team] = await q()
-    .select()
-    .from(teams)
-    .where(eq(teams.id, idParam(c)));
+export async function teamDetail(id: number): Promise<TeamDetail> {
+  const [team] = await q().select().from(teams).where(eq(teams.id, id));
   if (!team) throw notFound();
   const members = await q()
     .select({ person: people, profile: accessProfiles.name })
@@ -157,14 +165,19 @@ router.get("/teams/:id", async (c) => {
     })),
     groupIds: groups.map(({ group }) => group.id),
   };
-  return c.json(body);
+  return body;
+}
+
+router.get("/teams/:id", async (c) => {
+  requireRole(c, "viewer");
+  return c.json(await teamDetail(idParam(c)));
 });
 
-async function saveTeam(
+export async function saveTeam(
   id: number | null,
   input: ReturnType<typeof teamInputSchema.parse>,
-  actor: { id: number; email: string },
-) {
+  actor: Actor,
+): Promise<number> {
   const taken = await q()
     .select({ id: teams.id })
     .from(teams)
@@ -219,18 +232,20 @@ router.put("/teams/:id", async (c) => {
   return c.json({ id, message: `Saved team ${input.name}.` });
 });
 
-router.delete("/teams/:id", async (c) => {
-  const user = requireRole(c, "admin");
-  const [team] = await q()
-    .select()
-    .from(teams)
-    .where(eq(teams.id, idParam(c)));
+/** Deletes a team; its members keep their access profile and lose its groups at their next access update. */
+export async function deleteTeam(id: number, actor: Actor): Promise<string> {
+  const [team] = await q().select().from(teams).where(eq(teams.id, id));
   if (!team) throw notFound();
   await atomic(async () => {
     await q().delete(teams).where(eq(teams.id, team.id));
-    await record("team.deleted", `Deleted team ${team.name}`, { actor: user });
+    await record("team.deleted", `Deleted team ${team.name}`, { actor });
   });
-  return c.json({ message: `Deleted team ${team.name}.` });
+  return `Deleted team ${team.name}.`;
+}
+
+router.delete("/teams/:id", async (c) => {
+  const user = requireRole(c, "admin");
+  return c.json({ message: await deleteTeam(idParam(c), user) });
 });
 
 // -- access profiles --------------------------------------------------------------
@@ -263,8 +278,7 @@ async function grantsOf(profileIds: number[]) {
   }));
 }
 
-router.get("/profiles", async (c) => {
-  requireRole(c, "viewer");
+export async function profileList(): Promise<ProfileRow[]> {
   const rows = await q()
     .select({
       profile: accessProfiles,
@@ -283,15 +297,16 @@ router.get("/profiles", async (c) => {
       .filter((row) => row.grant.profileId === profile.id)
       .map((row) => ({ connection: row.connection.name, groups: row.groups.map(groupLabel) })),
   }));
-  return c.json(body);
+  return body;
+}
+
+router.get("/profiles", async (c) => {
+  requireRole(c, "viewer");
+  return c.json(await profileList());
 });
 
-router.get("/profiles/:id", async (c) => {
-  requireRole(c, "viewer");
-  const [profile] = await q()
-    .select()
-    .from(accessProfiles)
-    .where(eq(accessProfiles.id, idParam(c)));
+export async function profileDetail(id: number): Promise<ProfileDetail> {
+  const [profile] = await q().select().from(accessProfiles).where(eq(accessProfiles.id, id));
   if (!profile) throw notFound();
   const members = await q()
     .select({ person: people, team: teams.name })
@@ -316,14 +331,19 @@ router.get("/profiles/:id", async (c) => {
       team,
     })),
   };
-  return c.json(body);
+  return body;
+}
+
+router.get("/profiles/:id", async (c) => {
+  requireRole(c, "viewer");
+  return c.json(await profileDetail(idParam(c)));
 });
 
-async function saveProfile(
+export async function saveProfile(
   id: number | null,
   input: ReturnType<typeof profileInputSchema.parse>,
-  actor: { id: number; email: string },
-) {
+  actor: Actor,
+): Promise<number> {
   const errors: Record<string, string> = {};
   const taken = await q()
     .select({ id: accessProfiles.id })
@@ -423,12 +443,9 @@ router.put("/profiles/:id", async (c) => {
   });
 });
 
-router.delete("/profiles/:id", async (c) => {
-  const user = requireRole(c, "admin");
-  const [profile] = await q()
-    .select()
-    .from(accessProfiles)
-    .where(eq(accessProfiles.id, idParam(c)));
+/** Deletes an access profile that nobody has. */
+export async function deleteProfile(id: number, actor: Actor): Promise<string> {
+  const [profile] = await q().select().from(accessProfiles).where(eq(accessProfiles.id, id));
   if (!profile) throw notFound();
   const assigned = await q()
     .select({ id: people.id })
@@ -439,9 +456,14 @@ router.delete("/profiles/:id", async (c) => {
     throw new AppError(409, "protected", `${profile.name} is still assigned to people.`);
   await atomic(async () => {
     await q().delete(accessProfiles).where(eq(accessProfiles.id, profile.id));
-    await record("profile.deleted", `Deleted access profile ${profile.name}`, { actor: user });
+    await record("profile.deleted", `Deleted access profile ${profile.name}`, { actor });
   });
-  return c.json({ message: `Deleted access profile ${profile.name}.` });
+  return `Deleted access profile ${profile.name}.`;
+}
+
+router.delete("/profiles/:id", async (c) => {
+  const user = requireRole(c, "admin");
+  return c.json({ message: await deleteProfile(idParam(c), user) });
 });
 
 export default router;

@@ -20,7 +20,7 @@ import {
 import { atomic, q } from "../db/tx";
 import { logger } from "../logger";
 import { recordListing } from "./accounts";
-import { record } from "./audit";
+import { record, userIdOf, type Operator } from "./audit";
 import { adapterClassOf, buildAdapter, kindOf } from "./connections";
 import { fullName } from "./people";
 import { desiredAccess } from "./policy";
@@ -43,7 +43,8 @@ export class SyncError extends Error {
   }
 }
 
-type Actor = Pick<User, "id" | "email"> | null;
+/** Who started a read: an admin, the operator (`cli`), or nobody: the schedule. */
+type Actor = Pick<User, "id" | "email"> | Operator | null;
 
 async function run(
   connection: Connection,
@@ -53,7 +54,7 @@ async function run(
 ): Promise<SyncRun> {
   const [created] = await q()
     .insert(syncRuns)
-    .values({ connectionId: connection.id, kind, triggeredById: actor?.id ?? null })
+    .values({ connectionId: connection.id, kind, triggeredById: userIdOf(actor) })
     .returning();
   let status: SyncRun["status"];
   let summary: Record<string, unknown> = {};
