@@ -188,7 +188,7 @@ memberships, through the Admin SDK Directory API.
 | --- | --- | --- |
 | Service account key (JSON) | yes | The JSON key from step 1. |
 | Admin user | no | Only for domain-wide delegation: the administrator the service account acts as. Empty: the service account acts as itself with its admin roles. |
-| Domains | yes | The Workspace domains, separated by commas, the primary domain first. Work emails of new users must be in one of them; others stop the job. Comparisons read the accounts of all domains either way. |
+| Domains | yes | The Workspace domains, separated by commas, the primary domain first. Work emails of new users must be in one of them; others stop the job. Comparisons read the accounts of all domains either way. Without an admin user, the app reads a person's groups only in these domains: choose groups from them. |
 | Customer ID | no (`my_customer`) | Without an admin user, the app looks up the ID from a user of the first domain. Change only if the admin user manages several accounts, or to skip the lookup (Admin console > Account > Account settings). |
 | Organizational unit for new users | no (`/`) | Where new users go, e.g. `/Staff`. |
 | Email a first password | no (on) | New users get a generated password that must be changed at first sign-in, emailed to the personal address (see Initial passwords). Off: Google still requires a password, so the app sets a random one nobody knows; set a password in the Admin console or use single sign-on. |
