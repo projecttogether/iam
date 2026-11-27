@@ -11,6 +11,8 @@ import { seedDemo } from "./engine/demo";
 import { config } from "./config";
 import { adapterNames, runSettings, SETTING_NAMES } from "./cli/settings";
 import { runTokens, TOKEN_KINDS } from "./cli/tokens";
+import { runPeople } from "./cli/people";
+import { runGroups, runProfiles, runTeams } from "./cli/policy";
 import { UsageError, type Io } from "./cli/command";
 
 /**
@@ -28,6 +30,16 @@ const HELP = `IAM operator commands. On a server: docker compose run --rm -T mig
                                              connections without --id: add one, print its ID
   settings remove connections --id <id>      delete a connection
   settings test connections --id <id>        the test button
+  groups list [--json]                       the groups teams and profiles can grant, with their IDs
+  teams list [--json]                        the teams: ID, name, members, groups
+  teams show --id <id>                       a team's edit form, as JSON: the body for apply
+  teams apply [--id <id>]                    save a team from the JSON body on stdin; without --id: add one
+  teams remove --id <id>                     delete a team
+  profiles list|show|apply|remove            the same for access profiles
+  people list [--json]                       everyone not archived: ID, name, email, type, status, team, profile
+  people show --id <id>                      a person's edit form, as JSON: the body for apply
+  people apply [--id <id>]                   save a person from the JSON body on stdin; without --id: add one
+  people start <kind> --id <id>              start onboarding, access_update or offboarding
   tokens create api-key --name <name>        a new API key for another app, alone on stdout; run it with
                                              docker compose exec -T web cli …: Docker logs what "run" prints
   tokens list [--json]                       the API keys (never a key)
@@ -185,6 +197,18 @@ async function main(args: string[]) {
       return;
     case "tokens":
       process.exitCode = await runTokens(rest, processIo);
+      return;
+    case "groups":
+      process.exitCode = await runGroups(rest, processIo);
+      return;
+    case "teams":
+      process.exitCode = await runTeams(rest, processIo);
+      return;
+    case "profiles":
+      process.exitCode = await runProfiles(rest, processIo);
+      return;
+    case "people":
+      process.exitCode = await runPeople(rest, processIo);
       return;
     case "help":
     case "--help":

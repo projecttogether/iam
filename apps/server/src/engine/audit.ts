@@ -27,6 +27,11 @@ export function isOperator(actor: unknown): actor is Operator {
   return typeof actor === "object" && actor !== null && OPERATOR in actor;
 }
 
+/** The app user behind an actor, for columns such as "created by": none for the operator. */
+export function userIdOf(actor: Pick<User, "id"> | Operator | null | undefined): number | null {
+  return actor && !isOperator(actor) ? actor.id : null;
+}
+
 /** What an event is about, e.g. `{ type: "job", id: 7 }` (the Django model name in lower case). */
 export type Target = { type: string; id: number | string };
 

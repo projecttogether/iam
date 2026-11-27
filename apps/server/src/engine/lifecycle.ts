@@ -24,7 +24,7 @@ import {
 import { atomic, q } from "../db/tx";
 import { addDays, formatDate, today } from "../core/time";
 import { removableGroups } from "./accounts";
-import { record } from "./audit";
+import { isOperator, record, userIdOf, type Operator } from "./audit";
 import { lockPerson, refreshWorkflow, startJobs, stopWorkflow, type JobState } from "./jobs";
 import { fullName } from "./people";
 import { desiredAccess, entitledAccess, managedGroupIds, provisioningConnections, snapshot } from "./policy";
@@ -68,7 +68,8 @@ const STATUS_DURING: Partial<Record<WorkflowKind, PersonStatus>> = {
 
 const ARCHIVABLE: PersonStatus[] = ["planned", "offboarded"];
 
-type Actor = Pick<User, "id" | "email" | "role"> | null;
+/** An app user, the operator (`cli`, with an admin's rights), or nobody: the schedule. */
+type Actor = Pick<User, "id" | "email" | "role"> | Operator | null;
 
 /** Whether a workflow of this kind may start for the person now. */
 export function canStart(person: Pick<Person, "status">, kind: WorkflowKind): boolean {
@@ -137,7 +138,8 @@ export async function startWorkflow(
     // Every workflow can disable accounts (offboarding all of them, the others
     // where access was taken away): nobody starts one for someone with a higher
     // role in this app than their own.
-    if (actor !== null) await checkMayChange(person, actor, kind);
+    // The operator has an admin's rights, and no app user has a higher role.
+    if (actor !== null && !isOperator(actor)) await checkMayChange(person, actor, kind);
     if (kind === "offboarding") {
       if (automatic) {
         // The last day may have changed since the schedule selected this person.
@@ -169,7 +171,7 @@ export async function startWorkflow(
         desired: await snapshot(person),
         automatic,
         reason: reason.slice(0, 300),
-        createdById: actor?.id ?? null,
+        createdById: userIdOf(actor),
       })
       .returning();
     const planned = await planJobs(workflow!, person);
