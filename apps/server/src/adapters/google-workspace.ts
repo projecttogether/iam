@@ -472,12 +472,22 @@ export class GoogleWorkspaceAdapter extends Adapter {
     );
   }
 
+  /**
+   * The user's groups in each configured domain. Without an admin user, Google
+   * answers a listing by user with 404 unless it names a domain (and it takes
+   * no customer with a user).
+   */
   override async accountGroups(account: ExternalAccount): Promise<Set<string>> {
-    const groups = await this.pages("/groups", "groups", "list the user's groups", {
-      userKey: account.externalId,
-      maxResults: 200,
-    });
-    return new Set(groups.map((group) => String(group.id)));
+    const found = new Set<string>();
+    for (const domain of this.domains) {
+      const groups = await this.pages("/groups", "groups", "list the user's groups", {
+        userKey: account.externalId,
+        domain,
+        maxResults: 200,
+      });
+      for (const group of groups) found.add(String(group.id));
+    }
+    return found;
   }
 
   override async addToGroup(account: ExternalAccount, groupId: string): Promise<void> {

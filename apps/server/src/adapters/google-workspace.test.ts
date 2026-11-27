@@ -160,6 +160,8 @@ class Directory {
     const params = request.url.searchParams;
     const key = () => path.split("/").slice(2).join("/");
     if (request.method === "GET" && path === "/groups" && params.has("userKey")) {
+      // As Google without an admin user: a listing by user names a domain.
+      if (!params.get("domain")) return json(404, {});
       const id = params.get("userKey")!;
       const groups = Object.entries(this.memberships)
         .filter(([, members]) => members.has(id))
