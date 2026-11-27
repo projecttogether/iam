@@ -38,6 +38,16 @@ function table(rows: [string, string][]): string {
   return rows.map(([first, rest]) => `${first.padEnd(width)}  ${rest}\n`).join("");
 }
 
+/**
+ * The groups the forms offer. A group the last import no longer found is
+ * dropped on save, as the forms drop it, so it cannot come back granted.
+ */
+async function choosable(): Promise<Set<number>> {
+  return new Set(
+    (await groupConnections()).flatMap((connection) => connection.groups.map((group) => group.id)),
+  );
+}
+
 function unknownVerb(verb: string | undefined, verbs: string[]): never {
   throw new UsageError(
     verb === undefined
@@ -110,6 +120,8 @@ export async function runTeams(args: string[], io: Io): Promise<number> {
         const actor = operator(`cli teams apply${id === undefined ? "" : ` --id ${id}`}`);
         const input = parseWith(teamInputSchema, await readJsonBody(io));
         if (id !== undefined) await found(`No team has the ID ${id}.`, () => teamDetail(id));
+        const groups = await choosable();
+        input.groupIds = input.groupIds.filter((groupId) => groups.has(groupId));
         const saved = await saveTeam(id ?? null, input, actor);
         io.err(`Saved team ${input.name}. ID: ${saved}\n`);
         io.out(json(await teamForm(saved)));
@@ -181,6 +193,9 @@ export async function runProfiles(args: string[], io: Io): Promise<number> {
         const actor = operator(`cli profiles apply${id === undefined ? "" : ` --id ${id}`}`);
         const input = parseWith(profileInputSchema, await readJsonBody(io));
         if (id !== undefined) await found(`No access profile has the ID ${id}.`, () => profileDetail(id));
+        const groups = await choosable();
+        for (const grant of input.grants)
+          grant.groupIds = grant.groupIds.filter((groupId) => groups.has(groupId));
         const saved = await saveProfile(id ?? null, input, actor);
         io.err(`Saved ${input.name}. ID: ${saved}. Start access updates for its people to apply changes.\n`);
         io.out(json(await profileForm(saved)));

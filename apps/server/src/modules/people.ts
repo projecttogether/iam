@@ -305,15 +305,14 @@ router.post("/people", async (c) => {
 });
 
 /**
- * Saves the edit form of a person and audits it. Returns the page's message,
- * and whether access changed (an access update applies it).
+ * Saves the edit form of an existing person and audits it. Returns the
+ * page's message, and whether access changed (an access update applies it).
  */
 export async function updatePerson(
   id: number,
   input: ReturnType<typeof personInputSchema.parse>,
   actor: Actor,
 ): Promise<{ message: string; info: boolean }> {
-  await personOr404(id);
   const result = await atomic(async () => {
     // The form saves the whole row: the lock keeps it from writing back a
     // status a workflow changed meanwhile.

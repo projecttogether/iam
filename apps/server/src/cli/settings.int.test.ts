@@ -2,7 +2,14 @@ import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { AdapterError } from "../adapters/base";
 import { getDb } from "../db/client";
-import { apiKeys, appSettings, auditEvents, connections, type AuditEvent } from "../db/schema";
+import {
+  apiKeys,
+  appSettings,
+  auditEvents,
+  connections,
+  providerGroups,
+  type AuditEvent,
+} from "../db/schema";
 import { secretsOf } from "../engine/connections";
 import { apiKeyFrom, hashApiKey } from "../engine/identity-requests";
 import { logger } from "../logger";
@@ -296,6 +303,33 @@ describe("cli settings and cli tokens", () => {
     STORE.failWith = null;
 
     expect((await settings(["test", "app"])).code).toBe(2);
+  });
+
+  it("imports groups and compares accounts as the connection's buttons do", async () => {
+    const connection = await makeConnection();
+    const imported = await settings(["import-groups", "connections", "--id", String(connection.id)]);
+    expect(imported.code, imported.err).toBe(0);
+    expect(JSON.parse(imported.out)).toEqual({ ok: true, message: "Group import finished." });
+    expect((await getDb().select().from(providerGroups)).map((group) => group.externalId).sort()).toEqual([
+      "g-eng",
+      "g-ops",
+      "g-staff",
+    ]);
+    expect((await events("sync.groups"))[0]).toMatchObject({
+      actorLabel: "operator",
+      details: { command: `cli settings import-groups connections --id ${connection.id}` },
+    });
+
+    const compared = await settings(["sync", "connections", "--id", String(connection.id)]);
+    expect(compared.code, compared.err).toBe(0);
+    expect((await events("sync.accounts"))[0]).toMatchObject({ actorLabel: "operator" });
+
+    STORE.failWith = new AdapterError("The server refused the token.");
+    const failed = await settings(["sync", "connections", "--id", String(connection.id)]);
+    expect(failed.code).toBe(1);
+    expect(JSON.parse(failed.out).ok).toBe(false);
+    STORE.failWith = null;
+    expect((await settings(["sync", "app"])).code).toBe(2);
   });
 
   it("shows and saves Admin › Settings with the page's body and checks", async () => {

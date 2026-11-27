@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getDb } from "../db/client";
-import { auditEvents, people, workflows, type AuditEvent } from "../db/schema";
+import { auditEvents, people, providerGroups, workflows, type AuditEvent } from "../db/schema";
 import {
   makeConnection,
   makeGroups,
@@ -112,6 +112,17 @@ describe("cli groups, teams, profiles and people", () => {
     expect(saved.code, saved.err).toBe(0);
     expect(JSON.parse(saved.out).groups).toEqual(["Fake app: Operations"]);
     expect((await cli(runTeams, ["list"])).out).toMatch(/^--id \d+ {2}Research; 0 members; 1 groups\n$/);
+
+    // A group the last import no longer found is dropped, as the form drops it.
+    await getDb()
+      .update(providerGroups)
+      .set({ missing: true })
+      .where(eq(providerGroups.id, groups["g-ops"]!.id));
+    const dropped = await cli(runTeams, ["apply", "--id", String(form.id)], {
+      ...form,
+      groupIds: [groups["g-ops"]!.id, groups["g-eng"]!.id],
+    });
+    expect(JSON.parse(dropped.out).groups).toEqual(["Fake app: Engineering"]);
 
     // The page's checks: a taken name, an unknown ID.
     const taken = await cli(runTeams, ["apply"], { name: "Research", description: "", groupIds: [] });

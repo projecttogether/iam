@@ -108,7 +108,8 @@ async function apply(args: string[], io: Io) {
     io.out(json(await personForm(person.id)));
     return;
   }
-  const { message } = await found(id, () => updatePerson(id, input, actor));
+  await found(id, () => personOr404(id));
+  const { message } = await updatePerson(id, input, actor);
   io.err(`${message}\n`);
   io.out(json(await personForm(id)));
 }

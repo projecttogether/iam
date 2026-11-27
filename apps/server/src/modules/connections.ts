@@ -545,7 +545,7 @@ router.post("/connections/:id/toggle", async (c) => {
   return c.json({ message: `Turned ${connection.name} ${state}.` });
 });
 
-function runAnswer(run: { kind: keyof typeof SYNC_KIND_LABELS; status: string; error: string }) {
+export function runAnswer(run: { kind: keyof typeof SYNC_KIND_LABELS; status: string; error: string }) {
   const label = SYNC_KIND_LABELS[run.kind];
   return run.status === "succeeded"
     ? { ok: true, message: `${label} finished.` }

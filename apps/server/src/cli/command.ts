@@ -61,7 +61,7 @@ export function parseArgs(
 export function idOption(parsed: Parsed, required: boolean): number | undefined {
   const value = parsed.options.get("--id");
   if (value === undefined) {
-    if (required) throw new UsageError("Give the entry's ID with --id (cli settings list shows them).");
+    if (required) throw new UsageError("Give the entry's ID with --id (its list command shows them).");
     return undefined;
   }
   if (!/^[1-9][0-9]{0,15}$/.test(value)) throw new UsageError("--id takes a positive whole number.");

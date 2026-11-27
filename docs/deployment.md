@@ -185,6 +185,8 @@ settings list`. `cli help` lists every command.
 | `cli settings apply connections --id <id>` | Saves a connection, as its edit form does. |
 | `cli settings remove connections --id <id>` | Deletes a connection that has no jobs and no access profile. |
 | `cli settings test connections --id <id>` | The "Test connection" button. |
+| `cli settings import-groups connections --id <id>` | The "Import groups" button. |
+| `cli settings sync connections --id <id>` | "Compare accounts now", or "Import people now" for an HR system. |
 | `cli tokens create api-key --name <name>` | A new API key for another app ([api.md](api.md)): printed once, alone on stdout. Run it with `docker compose exec` ([API keys](#api-keys)). |
 | `cli tokens list [--json]` | The API keys: name, first characters, created, last used, revoked. |
 | `cli tokens revoke <id>` | Revokes an API key. |
@@ -197,6 +199,7 @@ settings list`. `cli help` lists every command.
 | `cli profiles show --id <id>` | A profile's edit form as JSON (`name`, `description`, `defaultFor`, `grants` with `connectionId` and `groupIds`). |
 | `cli profiles apply [--id <id>]` | Saves an access profile from the body on stdin; without `--id`, adds one. |
 | `cli profiles remove --id <id>` | Deletes an access profile that nobody has. |
+| `cli people …` | Print personal data: run them with `docker compose exec -T web cli people …`, since Docker keeps what `run` prints in its log. |
 | `cli people list [--json]` | Everyone not archived: ID, name, work email, person type, status, team, access profile. |
 | `cli people show --id <id>` | A person's edit form as JSON: the body for `apply --id`. |
 | `cli people apply [--id <id>]` | Saves a person from the body on stdin; without `--id`, adds one. An empty `accessProfileId` takes the default profile of the person type. |

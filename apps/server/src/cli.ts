@@ -30,6 +30,9 @@ const HELP = `IAM operator commands. On a server: docker compose run --rm -T mig
                                              connections without --id: add one, print its ID
   settings remove connections --id <id>      delete a connection
   settings test connections --id <id>        the test button
+  settings import-groups connections --id <id>
+                                             the Import groups button
+  settings sync connections --id <id>        Compare accounts now (Import people now for an HR system)
   groups list [--json]                       the groups teams and profiles can grant, with their IDs
   teams list [--json]                        the teams: ID, name, members, groups
   teams show --id <id>                       a team's edit form, as JSON: the body for apply
@@ -40,6 +43,8 @@ const HELP = `IAM operator commands. On a server: docker compose run --rm -T mig
   people show --id <id>                      a person's edit form, as JSON: the body for apply
   people apply [--id <id>]                   save a person from the JSON body on stdin; without --id: add one
   people start <kind> --id <id>              start onboarding, access_update or offboarding
+                                             people commands print personal data: run them with
+                                             docker compose exec -T web cli …: Docker logs what "run" prints
   tokens create api-key --name <name>        a new API key for another app, alone on stdout; run it with
                                              docker compose exec -T web cli …: Docker logs what "run" prints
   tokens list [--json]                       the API keys (never a key)
