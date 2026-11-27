@@ -5,7 +5,7 @@ for the people who work with an organization, the access each of them should
 have, and the onboarding and offboarding that follow from it, for
 organizations that run their own tools.
 
-- **People** with type, team, manager, access profile, start date and last day,
+- **People** with type, team, manager, access profile, start date and end date,
   added by hand or imported from Personio.
 - **Access profiles** say which apps a kind of person gets an account in, and
   the groups there. **Teams** add their own groups.

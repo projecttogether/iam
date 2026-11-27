@@ -109,7 +109,7 @@ export async function startWorkflow(
     if (kind === "onboarding" && person.endDate && person.endDate < today()) {
       // The schedule would offboard the person right after.
       throw new LifecycleError(
-        `The last day of ${fullName(person)} (${formatDate(person.endDate)}) has passed. ` +
+        `The end date of ${fullName(person)} (${formatDate(person.endDate)}) has passed. ` +
           "Clear or change it before onboarding.",
       );
     }
@@ -142,11 +142,11 @@ export async function startWorkflow(
     if (actor !== null && !isOperator(actor)) await checkMayChange(person, actor, kind);
     if (kind === "offboarding") {
       if (automatic) {
-        // The last day may have changed since the schedule selected this person.
+        // The end date may have changed since the schedule selected this person.
         if (!person.endDate || person.endDate >= today()) {
-          throw new LifecycleError("The person's last day has not passed.");
+          throw new LifecycleError("The person's end date has not passed.");
         }
-        reason = `last day was ${formatDate(person.endDate)}`;
+        reason = `end date was ${formatDate(person.endDate)}`;
       }
     }
     if (kind === "onboarding" && person.accessProfileId === null) {
@@ -229,7 +229,7 @@ export async function higherRoleAppUser(
  * Offboarding turns off the person's app user, and every workflow may
  * disable their accounts (the sign-in provider's too), so nobody may start
  * one for someone with a higher role in this app than their own. The
- * schedule (no actor) still offboards everyone after their last day.
+ * schedule (no actor) still offboards everyone after their end date.
  */
 async function checkMayChange(person: Person, actor: Pick<User, "role">, kind: WorkflowKind): Promise<void> {
   const user = await higherRoleAppUser(person, actor);

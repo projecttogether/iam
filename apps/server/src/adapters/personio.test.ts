@@ -161,22 +161,48 @@ describe("Personio", () => {
       employee("12", "Ol", "D", { status: "inactive", termination_date: old }),
       // Inactive without a date: listed, so the app sees the change.
       employee("13", "No", "Date", { status: "terminated" }),
-      // The last day at work never ends access.
-      employee("14", "La", "St", { status: "active", last_day_at_work: recent }),
+      // The last day at work wins over the termination date and ends access.
+      employee("14", "La", "St", { status: "active", last_working_day: recent, termination_date: future }),
       // Past contract end without a status change: inactive.
       employee("15", "Co", "Ntract", { status: "active", end_date: recent }),
+      // Last day at work long ago, employment ended recently: still listed.
+      employee("16", "Wo", "Rk", { status: "inactive", last_working_day: old, termination_date: recent }),
     ];
     const [personioAdapter] = adapter(personio([records]));
 
     const people = new Map((await personioAdapter.listPeople()).map((record) => [record.externalId, record]));
 
-    expect(new Set(people.keys())).toEqual(new Set(["10", "11", "13", "14", "15"]));
-    expect(people.get("10")!.endDate).toBe(addDays(now, 20));
-    expect(people.get("10")!.active).toBe(true);
+    expect(new Set(people.keys())).toEqual(new Set(["10", "11", "13", "14", "15", "16"]));
+    expect(people.get("10")).toMatchObject({
+      endDate: future,
+      contractEndDate: old,
+      terminationDate: future,
+      lastDayAtWork: null,
+      active: true,
+    });
     expect(people.get("11")!.active).toBe(false);
     expect(people.get("13")!.active === false && people.get("13")!.endDate === null).toBe(true);
-    expect(people.get("14")!.active === true && people.get("14")!.endDate === null).toBe(true);
-    expect(people.get("15")!.active).toBe(false);
+    expect(people.get("14")).toMatchObject({
+      endDate: recent,
+      terminationDate: future,
+      lastDayAtWork: recent,
+      active: false,
+    });
+    expect(people.get("15")).toMatchObject({ endDate: recent, contractEndDate: recent, active: false });
+    expect(people.get("16")!.endDate).toBe(old);
+  });
+
+  it("finds the last day at work by its label", async () => {
+    const attributes = [{ key: "dynamic_7", label: "Letzter Arbeitstag", type: "standard" }];
+    const record = employee("17", "Ju", "Ly", { status: "active" });
+    record.attributes.dynamic_7 = { label: "Letzter Arbeitstag", value: "31.07.2099" };
+    const [personioAdapter, fetch] = adapter(personio([[record]], attributes));
+
+    const [july] = await personioAdapter.listPeople();
+
+    const listed = fetch.requests.filter((request) => request.url.pathname === "/v1/company/employees")[0]!;
+    expect(listed.url.searchParams.getAll("attributes[]")).toContain("dynamic_7");
+    expect(july).toMatchObject({ lastDayAtWork: "2099-07-31", endDate: "2099-07-31" });
   });
 
   it("skips unreadable records and keeps the rest", async () => {

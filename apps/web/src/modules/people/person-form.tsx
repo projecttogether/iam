@@ -217,7 +217,16 @@ export function PersonForm({
             hint="Empty: the profile that is the default for the person type."
           />
           <TextField {...text("startDate")} label="Start date" type="date" />
-          <TextField {...text("endDate")} label="End date" type="date" hint="Last working day." />
+          <TextField
+            {...text("endDate")}
+            label="End date"
+            type="date"
+            hint={
+              person?.source
+                ? `Offboarding is due the day after. ${person.source.connection} sets it on every import.`
+                : "Offboarding is due the day after."
+            }
+          />
           <div className="md:col-span-2">
             <TextareaField {...text("notes")} label="Notes" rows={3} />
           </div>

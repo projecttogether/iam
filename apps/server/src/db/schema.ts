@@ -394,8 +394,15 @@ export const people = pgTable(
       .notNull()
       .$default(() => "planned"),
     startDate: date("start_date", { mode: "string" }),
-    /** Last working day. */
+    /**
+     * The schedule starts offboarding the day after. An import sets it to the
+     * last day at work, else the termination date, else the contract end.
+     */
     endDate: date("end_date", { mode: "string" }),
+    /** The dates of the HR system, shown as it names them; only an import sets them. */
+    contractEndDate: date("contract_end_date", { mode: "string" }),
+    terminationDate: date("termination_date", { mode: "string" }),
+    lastDayAtWork: date("last_day_at_work", { mode: "string" }),
     sourceId: varchar("source_id", { length: 255 })
       .notNull()
       .$default(() => ""),

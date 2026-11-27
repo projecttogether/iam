@@ -1,7 +1,7 @@
 import { config } from "../config";
 
 /**
- * Dates. Start dates, last days and the schedule follow the time zone of
+ * Dates. Start dates, end dates and the schedule follow the time zone of
  * TZ; dates travel as YYYY-MM-DD strings.
  */
 

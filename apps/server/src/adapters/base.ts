@@ -310,8 +310,12 @@ export type HRRecord = {
   managerEmail: string;
   /** YYYY-MM-DD */
   startDate: string | null;
-  /** YYYY-MM-DD */
+  /** YYYY-MM-DD: the schedule starts offboarding the day after. */
   endDate: string | null;
+  /** YYYY-MM-DD: the dates the end date comes from, as the HR system has them. */
+  contractEndDate: string | null;
+  terminationDate: string | null;
+  lastDayAtWork: string | null;
   /** False once the HR system marks the person as left or inactive. */
   active: boolean;
 };
