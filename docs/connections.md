@@ -376,7 +376,9 @@ start and end dates. Read only: nothing is written to Personio. Uses the
 Personio API v1.
 
 **Set up in Personio first:** create API credentials in Settings >
-Integrations > API credentials.
+Integrations > API credentials, and let them read the attributes the import
+uses, among them the contract end, the termination date and the last day of
+work. An attribute the credentials cannot read stays empty in this app.
 
 | Field | Required | Meaning |
 | --- | --- | --- |
@@ -400,10 +402,17 @@ Integrations > API credentials.
   Personio record. Matched to a person by work email.
 - Private email, planned start date and supervisor custom attributes are found
   by their label.
-- End date: the termination date wins over the contract end date. The "last
-  day at work" attribute is ignored.
+- Dates: the contract end, the termination date and the last day at work are
+  kept as Personio has them and shown on the person page under those names.
+  HR sets the last day at work by hand in Personio's offboarding, so most
+  people have none. A custom attribute labeled "Last day of work", "Last day
+  at work" or "Letzter Arbeitstag" counts too.
+- End date, which offboarding follows: the last day at work, else the
+  termination date, else the contract end.
 - A person is inactive when the status is inactive, terminated or
-  terminated_with_access, or the end date has passed.
+  terminated_with_access, or the end date has passed. A leaver stays listed
+  for the configured days after the later of the end date and the
+  termination date (or contract end).
 
 **What the import does in this app**
 
@@ -411,8 +420,8 @@ Integrations > API credentials.
   default for their type. Inactive or already-left records are not added.
 - A record is matched by its Personio ID, or else to a person without a source
   that has the same work email. That person is then linked to Personio.
-- Names, personal email, job title, type, start and end dates, team and manager
-  are updated. A work email is filled in only when the person has none; a
+- Names, personal email, job title, type, the start date, the dates above,
+  team and manager are updated. A work email is filled in only when the person has none; a
   differing work email is reported, never changed.
 - The import never offboards anyone. The schedule starts offboarding the day
   after a person's end date. People missing from Personio, and inactive people

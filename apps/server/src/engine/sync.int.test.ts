@@ -180,6 +180,9 @@ function hrRecord(
     managerEmail: "",
     startDate: null,
     endDate: null,
+    contractEndDate: null,
+    terminationDate: null,
+    lastDayAtWork: null,
     active: true,
     ...values,
   };
@@ -360,15 +363,30 @@ describe("reads from connections", () => {
     ]);
     expect(ada!.status).toBe("planned");
     expect(await getDb().select().from(people).where(eq(people.sourceId, "43"))).toEqual([]);
-    FAKE_HR.records[0]!.endDate = addDays(start, 90);
-    FAKE_HR.records[0]!.workEmail = "ada.new@example.invalid";
+    Object.assign(FAKE_HR.records[0]!, {
+      endDate: addDays(start, 60),
+      contractEndDate: addDays(start, 365),
+      terminationDate: addDays(start, 90),
+      lastDayAtWork: addDays(start, 60),
+      workEmail: "ada.new@example.invalid",
+    });
     run = await importPeople(hr);
     const updated = await personRow(ada!.id);
-    expect(updated.endDate).toBe(addDays(start, 90));
+    expect([
+      updated.endDate,
+      updated.contractEndDate,
+      updated.terminationDate,
+      updated.lastDayAtWork,
+    ]).toEqual([addDays(start, 60), addDays(start, 365), addDays(start, 90), addDays(start, 60)]);
     expect(updated.workEmail, "a work email never changes by import").toBe("ada@example.invalid");
     const summary = run.summary as { work_email_differs: { id: number }[]; updated: { fields: string[] }[] };
     expect(summary.work_email_differs[0]!.id).toBe(ada!.id);
-    expect(summary.updated[0]!.fields).toEqual(["end_date"]);
+    expect(summary.updated[0]!.fields).toEqual([
+      "contract_end_date",
+      "end_date",
+      "last_day_at_work",
+      "termination_date",
+    ]);
   });
 
   it("claims existing people by work email in a people import", async () => {
@@ -428,7 +446,7 @@ describe("reads from connections", () => {
     expect(await startDueOnboarding()).toEqual([]);
   });
 
-  it("offboards the day after the last day", async () => {
+  it("offboards the day after the end date", async () => {
     const { person } = await standardSetup();
     await updatePerson(person.id, { status: "active", endDate: today() });
     expect(await startDueOffboarding()).toEqual([]);

@@ -200,6 +200,9 @@ router.get("/people/:id", async (c) => {
     accessProfile: await ref(accessProfiles, person.accessProfileId),
     startDate: person.startDate,
     endDate: person.endDate,
+    contractEndDate: person.contractEndDate,
+    terminationDate: person.terminationDate,
+    lastDayAtWork: person.lastDayAtWork,
     source: source ? { connection: source.name, id: person.sourceId } : null,
     notes: person.notes,
     onboardingPaused: person.onboardingPaused,
@@ -324,10 +327,10 @@ export async function updatePerson(
     const changed = Object.keys(FIELD_NAMES).filter(
       (key) => (person[key as keyof Person] ?? null) !== (submitted[key as keyof Values] ?? null),
     );
-    // Changing the last day can cause the worker to turn off the linked app user.
+    // Changing the end date can cause the worker to turn off the linked app user.
     // The operator has an admin's rights, and no app user has a higher role.
     if (changed.includes("endDate") && !isOperator(actor) && (await higherRoleAppUser(person, actor))) {
-      throw validationError({ endDate: "Only an admin can change this person's last day." });
+      throw validationError({ endDate: "Only an admin can change this person's end date." });
     }
     const update: Partial<Person> = { ...values };
     if (changed.includes("startDate") || changed.includes("accessProfileId")) update.onboardingPaused = false;

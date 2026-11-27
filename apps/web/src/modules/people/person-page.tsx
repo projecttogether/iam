@@ -85,8 +85,21 @@ function Actions({ person }: { person: PersonDetail }) {
   );
 }
 
+/** Which of the HR system's dates the end date is, when it is one of them. */
+function endDateSource(person: PersonDetail): string | null {
+  if (person.endDate === null) return null;
+  if (person.endDate === person.lastDayAtWork) return "the last day at work";
+  if (person.endDate === person.terminationDate) return "the termination date";
+  if (person.endDate === person.contractEndDate) return "the contract end";
+  return null;
+}
+
+const OFFBOARDED_STATUSES = new Set<PersonDetail["status"]>(["offboarding", "offboarded", "archived"]);
+
 function ProfileCard({ person }: { person: PersonDetail }) {
   const format = useFormatter();
+  const date = (value: string | null) => (value ? format.date(value) : "—");
+  const source = endDateSource(person);
   return (
     <Section title="Profile">
       <Details className="lg:grid-cols-2">
@@ -109,8 +122,17 @@ function ProfileCard({ person }: { person: PersonDetail }) {
             <ToneBadge tone="warn">none</ToneBadge>
           )}
         </Detail>
-        <Detail label="Start date">{person.startDate ? format.date(person.startDate) : "—"}</Detail>
-        <Detail label="Last day">{person.endDate ? format.date(person.endDate) : "—"}</Detail>
+        <Detail label="Start date">{date(person.startDate)}</Detail>
+        {person.source ? (
+          // As Personio names them; HR sets the last day at work only in an offboarding.
+          <>
+            <Detail label="Contract ends">{date(person.contractEndDate)}</Detail>
+            <Detail label="Termination date">{date(person.terminationDate)}</Detail>
+            <Detail label="Last day at work">{date(person.lastDayAtWork)}</Detail>
+          </>
+        ) : (
+          <Detail label="End date">{date(person.endDate)}</Detail>
+        )}
         <Detail label="Source">
           {person.source ? (
             <>
@@ -122,6 +144,14 @@ function ProfileCard({ person }: { person: PersonDetail }) {
           )}
         </Detail>
       </Details>
+      {person.source && person.endDate ? (
+        // Also for leavers the import no longer lists, whose HR dates stay empty.
+        <p className="text-muted-foreground text-sm">
+          {OFFBOARDED_STATUSES.has(person.status) ? "End date: " : "Offboarding is due after "}
+          {format.date(person.endDate)}
+          {source ? `, ${source}` : ""}.
+        </p>
+      ) : null}
       {person.notes ? (
         <p className="text-muted-foreground text-sm whitespace-pre-line">{person.notes}</p>
       ) : null}
@@ -203,7 +233,7 @@ export function PersonPage({ id }: { id: number }) {
   if (query.isPending) return <LoadingState />;
   if (query.isError) return <ErrorState error={query.error} onRetry={() => void query.refetch()} />;
   const person = query.data;
-  const lastDayPassed = person.endDate !== null && person.endDate < person.today && person.can.onboard;
+  const endDatePassed = person.endDate !== null && person.endDate < person.today && person.can.onboard;
   return (
     <Page>
       <PageHeader
@@ -235,10 +265,10 @@ export function PersonPage({ id }: { id: number }) {
           </AlertDescription>
         </Alert>
       ) : null}
-      {lastDayPassed ? (
+      {endDatePassed ? (
         <Alert variant="destructive">
           <AlertDescription>
-            The last day has passed. Clear or change it before onboarding, or the schedule offboards{" "}
+            The end date has passed. Clear or change it before onboarding, or the schedule offboards{" "}
             {person.firstName} right after.
           </AlertDescription>
         </Alert>

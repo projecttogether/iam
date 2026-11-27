@@ -172,7 +172,12 @@ export type PersonDetail = {
   manager: Ref | null;
   accessProfile: Ref | null;
   startDate: string | null;
+  /** The schedule starts offboarding the day after. */
   endDate: string | null;
+  /** The dates of the HR system the end date comes from; null for people added here. */
+  contractEndDate: string | null;
+  terminationDate: string | null;
+  lastDayAtWork: string | null;
   source: { connection: string; id: string } | null;
   notes: string;
   onboardingPaused: boolean;
@@ -239,7 +244,7 @@ export const personInputSchema = z
       ctx.addIssue({
         code: "custom",
         path: ["endDate"],
-        message: "The last day cannot be before the start date.",
+        message: "The end date cannot be before the start date.",
       });
     }
   });

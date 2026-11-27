@@ -50,6 +50,13 @@
       "when": 1795603017739,
       "tag": "0006_organization_name_default",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795776819950,
+      "tag": "0007_person_hr_end_dates",
+      "breakpoints": true
     }
   ]
 }

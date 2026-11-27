@@ -24,14 +24,14 @@ per connection:
 | --- | --- | --- | --- |
 | Onboarding | By an approver, or by the schedule a set number of days before the start date | Planned → Onboarding → Active | Create or update the account where the profile grants one |
 | Access update | By an approver after changing profile, team or policy; during onboarding it starts a new onboarding instead | stays Active | Create or update where granted; disable known accounts no longer granted |
-| Offboarding | By an approver, or by the schedule the day after the last day | → Offboarding → Offboarded | Disable every known account (also one the last comparison no longer listed) and every account the profile grants |
+| Offboarding | By an approver, or by the schedule the day after the end date | → Offboarding → Offboarded | Disable every known account (also one the last comparison no longer listed) and every account the profile grants |
 
 A new workflow for the same person replaces the open one: its unfinished jobs
 are cancelled. Onboarding and access updates can be cancelled; offboarding
 cannot (retry or complete its steps instead). A cancelled onboarding returns
 the person to planned, and the schedule does not start it again until the
 start date or the access profile changes (an approver can still start it).
-Onboarding refuses a last day that has passed: clear or change it first, or
+Onboarding refuses an end date that has passed: clear or change it first, or
 the schedule would offboard the person right after. Offboarding turns off the
 person's app user at once.
 
@@ -192,7 +192,7 @@ None of these change anything in a connected app.
   accounts now" records it.
 - **People import** (Personio) creates planned people and updates names,
   type, team, manager and dates. It never changes a work email, never
-  offboards anyone by itself (the last day does that through the schedule),
+  offboards anyone by itself (the end date does that through the schedule),
   and reports people the HR system no longer lists.
 
 The worker runs comparisons and imports on each connection's interval.
@@ -204,7 +204,7 @@ Once a minute the worker:
 1. starts onboarding for planned people with an access profile whose start
    date is within the lead time (Admin › Settings), unless an approver
    cancelled their last onboarding;
-2. starts offboarding for people whose last day has passed (planned people
+2. starts offboarding for people whose end date has passed (planned people
    only when they have an account or an app user);
 3. completes open workflows whose jobs are all done;
 4. after the queued jobs, runs the one people import or account comparison

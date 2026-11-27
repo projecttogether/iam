@@ -345,6 +345,9 @@ const IMPORTED_FIELDS = [
   "personType",
   "startDate",
   "endDate",
+  "contractEndDate",
+  "terminationDate",
+  "lastDayAtWork",
 ] as const;
 const FIELD_NAMES: Record<string, string> = {
   firstName: "first_name",
@@ -354,6 +357,9 @@ const FIELD_NAMES: Record<string, string> = {
   personType: "person_type",
   startDate: "start_date",
   endDate: "end_date",
+  contractEndDate: "contract_end_date",
+  terminationDate: "termination_date",
+  lastDayAtWork: "last_day_at_work",
 };
 
 const iexact = (column: typeof people.workEmail | typeof teams.name, value: string) =>
@@ -395,6 +401,9 @@ export async function importRecord(
       : "employee") as Person["personType"],
     startDate: item.startDate,
     endDate: item.endDate,
+    contractEndDate: item.contractEndDate,
+    terminationDate: item.terminationDate,
+    lastDayAtWork: item.lastDayAtWork,
   };
   const [team] = item.team
     ? await q().select().from(teams).where(iexact(teams.name, item.team)).orderBy(asc(teams.name)).limit(1)

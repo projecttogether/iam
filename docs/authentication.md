@@ -14,8 +14,8 @@ they may do: a person signs in only when an active app user exists for them.
 An app user can be linked to a person. Starting that person's offboarding
 turns the app user off at once. Because of that, only someone with the same
 or a higher role can start it: an approver cannot offboard an admin of this
-app. The same role rule applies to changing a person's last day. The
-schedule starts offboarding after the last day currently on record has passed.
+app. The same role rule applies to changing a person's end date. The
+schedule starts offboarding after the end date currently on record has passed.
 
 ## Any OpenID Connect provider
 

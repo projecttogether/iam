@@ -6,7 +6,11 @@ explains how the pieces work together.
 - **Person**: someone whose access the app manages. Has a type (employee,
   intern, freelancer, volunteer, external), a status (planned, onboarding,
   active, offboarding, offboarded, archived), a team, an access profile, a
-  start date and a last day.
+  start date and an end date.
+- **End date**: the schedule starts a person's offboarding the day after it.
+  An import from Personio sets it to the last day at work, else the
+  termination date, else the contract end, and keeps those three dates under
+  Personio's names for the person page.
 - **App user**: someone who may use this app, with a role (viewer, approver,
   admin). May be linked to a person; offboarding that person turns the app
   user off.

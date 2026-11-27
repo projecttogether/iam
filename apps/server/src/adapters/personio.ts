@@ -18,8 +18,13 @@ import type { HttpClient, HttpResponse, RequestOptions } from "./http";
  * Uses the Personio Personnel Data API v1: POST /v1/auth with the API
  * credentials returns a bearer token; GET /v1/company/employees lists people
  * page by page. Custom attributes (private email, planned start date,
- * supervisor) are found by their label through
+ * last day at work, supervisor) are found by their label through
  * GET /v1/company/employees/attributes and requested by key.
+ *
+ * Personio has three end dates: the contract end, the termination date and
+ * the last day at work, which HR sets by hand in an offboarding. The record
+ * carries all three; its end date, which offboarding follows, is the first
+ * one set of last day at work, termination date and contract end.
  *
  * The adapter only reads Personio and returns HRRecord objects; the app
  * matches and creates people. Records it cannot read (missing name,
@@ -75,6 +80,15 @@ const START_DATE_KEYS = [
   "eintrittsdatum",
   "eintritt",
 ];
+const CONTRACT_END_KEYS = ["end_date", "contract_end_date"];
+const TERMINATION_KEYS = ["termination_date"];
+const LAST_DAY_AT_WORK_KEYS = [
+  "last_working_day",
+  "last_working_date",
+  "last_day_of_work",
+  "last day at work",
+  "letzter arbeitstag",
+];
 const SUPERVISOR_KEYS = [
   "supervisor",
   "Supervisor",
@@ -96,9 +110,9 @@ const STANDARD_ATTRIBUTE_KEYS = [
   "status",
   "employment_type",
   ...START_DATE_KEYS,
-  "end_date",
-  "contract_end_date",
-  "termination_date",
+  ...CONTRACT_END_KEYS,
+  ...TERMINATION_KEYS,
+  ...LAST_DAY_AT_WORK_KEYS,
   "private_email",
   "personal_email",
   "email_private",
@@ -287,6 +301,12 @@ function germanDate(value: string): string | null {
   return calendarDate(Number(match[3]), Number(match[2]), Number(match[1]));
 }
 
+/** The later of two YYYY-MM-DD dates; null only when both are. */
+function later(first: string | null, second: string | null): string | null {
+  if (first === null || second === null) return first ?? second;
+  return first > second ? first : second;
+}
+
 export function parseDate(attributes: Json, ...keys: string[]): string | null {
   const value = text(attributes, ...keys);
   if (!value) return null;
@@ -449,7 +469,7 @@ export class PersonioAdapter extends Adapter {
 
   /**
    * Standard keys plus custom attributes whose label names a private email,
-   * a start date or a supervisor, and the team attribute.
+   * a start date, the last day at work or a supervisor, and the team attribute.
    */
   private async employeeAttributeKeys(client: HttpClient): Promise<string[]> {
     if (this.attributeKeys !== null) return this.attributeKeys;
@@ -457,7 +477,9 @@ export class PersonioAdapter extends Adapter {
     const teamAttribute = String(this.setting("team_attribute", "department"));
     if (!keys.includes(teamAttribute)) keys.push(teamAttribute);
     const wanted = new Set(
-      [...PRIVATE_EMAIL_KEYS, ...START_DATE_KEYS, ...SUPERVISOR_KEYS].map(normalizedKey),
+      [...PRIVATE_EMAIL_KEYS, ...START_DATE_KEYS, ...LAST_DAY_AT_WORK_KEYS, ...SUPERVISOR_KEYS].map(
+        normalizedKey,
+      ),
     );
     wanted.add(normalizedKey(teamAttribute));
     const data = await this.request(client, "GET", "/v1/company/employees/attributes", "read attributes");
@@ -566,16 +588,19 @@ export class PersonioAdapter extends Adapter {
     if (!isEmail(personalEmail)) personalEmail = "";
 
     const status = text(attributes, "status").toLowerCase();
-    const contractEnd = parseDate(attributes, "end_date", "contract_end_date");
-    const termination = parseDate(attributes, "termination_date");
-    // The termination date wins over the contract end date; the "last day at
-    // work" is informational and never ends access.
-    const endDate = termination ?? contractEnd;
+    const contractEndDate = parseDate(attributes, ...CONTRACT_END_KEYS);
+    const terminationDate = parseDate(attributes, ...TERMINATION_KEYS);
+    const lastDayAtWork = parseDate(attributes, ...LAST_DAY_AT_WORK_KEYS);
+    // Access ends after the last day at work when HR set one; otherwise the
+    // termination date wins over the contract end.
+    const endDate = lastDayAtWork ?? terminationDate ?? contractEndDate;
     const active = !INACTIVE_STATUSES.has(status) && !(endDate !== null && endDate < today);
-    // Leavers stay listed for a while so the app sees them leave; without an
-    // end date the app cannot tell when, so they stay listed.
+    // Leavers stay listed for a while after their employment ends so the app
+    // sees them leave; without an end date the app cannot tell when, so they
+    // stay listed.
     const windowDays = toInt(this.setting("include_inactive_days", 30) || 0);
-    if (!active && endDate !== null && endDate < addDays(today, -windowDays)) return null;
+    const leftOn = later(endDate, terminationDate ?? contractEndDate);
+    if (!active && leftOn !== null && leftOn < addDays(today, -windowDays)) return null;
 
     const employmentType = text(attributes, ...EMPLOYMENT_TYPE_KEYS);
     const position = text(attributes, ...POSITION_KEYS);
@@ -594,6 +619,9 @@ export class PersonioAdapter extends Adapter {
       managerEmail: isEmail(supervisor) ? supervisor.toLowerCase() : "",
       startDate: parseDate(attributes, ...START_DATE_KEYS),
       endDate,
+      contractEndDate,
+      terminationDate,
+      lastDayAtWork,
       active,
     };
     return { record, supervisorId, supervisor };

@@ -107,7 +107,7 @@ describe("people", () => {
     expect(events).toHaveLength(1);
   });
 
-  it("refuses a last day before the start date", async () => {
+  it("refuses an end date before the start date", async () => {
     const approver = await makeUser("approver");
     const response = await request("POST", "/api/v1/people", {
       user: approver,
@@ -133,7 +133,7 @@ describe("people", () => {
     expect(local.status).toBe(201);
   });
 
-  it("lets only an admin change the last day of a person linked to an admin", async () => {
+  it("lets only an admin change the end date of a person linked to an admin", async () => {
     const { person } = await standardSetup();
     const approver = await makeUser("approver");
     const admin = await makeUser("admin");

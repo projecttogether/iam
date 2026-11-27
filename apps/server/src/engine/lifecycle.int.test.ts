@@ -605,13 +605,13 @@ describe("workflows, jobs and tasks (test_lifecycle.py)", () => {
       /is an admin of this app/,
     );
     expect((await getUser(admin.id)).isActive && (await getPerson(person.id)).status === "active").toBe(true);
-    // Another admin may, and so may the schedule after the last day.
+    // Another admin may, and so may the schedule after the end date.
     await startWorkflow(person.id, "offboarding", { actor: admin });
     expect((await getUser(admin.id)).isActive).toBe(false);
   });
 
   it.each([null, 0, 7])(
-    "automatic offboarding rechecks the current last day (new end date %s)",
+    "automatic offboarding rechecks the current end date (new end date %s)",
     async (newEndDate) => {
       const { person } = await standardSetup();
       const admin = await makeUser("admin");
@@ -623,7 +623,7 @@ describe("workflows, jobs and tasks (test_lifecycle.py)", () => {
       await expectRaises(
         startWorkflow(person.id, "offboarding", { automatic: true }),
         LifecycleError,
-        /last day has not passed/,
+        /end date has not passed/,
       );
       expect(await db().select().from(workflows)).toEqual([]);
       expect((await getUser(admin.id)).isActive).toBe(true);
@@ -1304,7 +1304,7 @@ describe("workflows, jobs and tasks (test_lifecycle.py)", () => {
     expect(current.status === "onboarding" && !current.onboardingPaused).toBe(true);
   });
 
-  it("onboarding refuses a last day that has passed", async () => {
+  it("onboarding refuses an end date that has passed", async () => {
     const { person } = await standardSetup();
     const approver = await makeUser("approver");
     await setPerson(person.id, { status: "offboarded", endDate: addDays(today(), -1) });

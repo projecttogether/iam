@@ -78,15 +78,71 @@ describe("person page", () => {
     expect(router.state.location.pathname).toBe("/");
   });
 
-  it("warns when the last day has passed before onboarding", async () => {
+  it("warns when the end date has passed before onboarding", async () => {
     user.current = me("approver");
     stubApi({ "GET /people/7": { body: personDetail({ endDate: "2026-11-01", onboardingPaused: true }) } });
     renderPage(<PersonPage id={7} />);
     expect(
       await screen.findByText(
-        /The last day has passed. Clear or change it before onboarding, or the schedule offboards Ada/,
+        /The end date has passed. Clear or change it before onboarding, or the schedule offboards Ada/,
       ),
     ).toBeVisible();
     expect(screen.getByText(/The last onboarding was cancelled/)).toBeVisible();
+  });
+
+  it("shows the end date of a person added here", async () => {
+    user.current = me("viewer");
+    stubApi({ "GET /people/7": { body: personDetail({ endDate: "2027-03-31" }) } });
+    renderPage(<PersonPage id={7} />);
+    expect((await screen.findByText("End date")).nextSibling).toHaveTextContent("Mar 31, 2027");
+    expect(screen.queryByText("Last day at work")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Offboarding is due/)).not.toBeInTheDocument();
+  });
+
+  it("shows Personio's three end dates and which one offboarding follows", async () => {
+    user.current = me("viewer");
+    const imported = {
+      status: "active" as const,
+      source: { connection: "Personio", id: "37" },
+      endDate: "2026-12-04",
+      contractEndDate: "2028-06-14",
+      terminationDate: "2027-01-14",
+      lastDayAtWork: "2026-12-04",
+    };
+    stubApi({ "GET /people/7": { body: personDetail(imported) } });
+    renderPage(<PersonPage id={7} />);
+    const value = (label: string) => screen.getByText(label).nextSibling;
+    expect((await screen.findByText("Contract ends")).nextSibling).toHaveTextContent("Jun 14, 2028");
+    expect(value("Termination date")).toHaveTextContent("Jan 14, 2027");
+    expect(value("Last day at work")).toHaveTextContent("Dec 4, 2026");
+    expect(screen.queryByText("End date")).not.toBeInTheDocument();
+    expect(screen.getByText("Offboarding is due after Dec 4, 2026, the last day at work.")).toBeVisible();
+  });
+
+  it("keeps the end date of a leaver whose Personio dates were never imported", async () => {
+    user.current = me("viewer");
+    const left = {
+      status: "offboarded" as const,
+      source: { connection: "Personio", id: "12" },
+      endDate: "2026-03-31",
+    };
+    stubApi({ "GET /people/7": { body: personDetail(left) } });
+    renderPage(<PersonPage id={7} />);
+    expect(await screen.findByText("End date: Mar 31, 2026.")).toBeVisible();
+    expect(screen.queryByText(/Offboarding is due/)).not.toBeInTheDocument();
+  });
+
+  it("says when HR has not set the last day at work", async () => {
+    user.current = me("viewer");
+    const imported = {
+      status: "active" as const,
+      source: { connection: "Personio", id: "37" },
+      endDate: "2027-01-14",
+      terminationDate: "2027-01-14",
+    };
+    stubApi({ "GET /people/7": { body: personDetail(imported) } });
+    renderPage(<PersonPage id={7} />);
+    expect((await screen.findByText("Last day at work")).nextSibling).toHaveTextContent("—");
+    expect(screen.getByText("Offboarding is due after Jan 14, 2027, the termination date.")).toBeVisible();
   });
 });
