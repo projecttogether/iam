@@ -6,6 +6,7 @@ import { appSettings, connections, type Connection } from "../db/schema";
 import { q } from "../db/tx";
 import { operator } from "../engine/audit";
 import { adapterClassOf, kindOf } from "../engine/connections";
+import { exclusive, SYNC_LOCK_ID } from "../engine/schedule";
 import { compareAccounts, importGroups, importPeople } from "../engine/sync";
 import { AppError, parseWith } from "../http/errors";
 import {
@@ -221,17 +222,23 @@ async function test(id: number, command: string, io: Io): Promise<number> {
 
 /**
  * The "Import groups" button, or "Compare accounts now" ("Import people now"
- * for an HR system): the result on stdout; exit 1 when the read fails.
+ * for an HR system): the result on stdout; exit 1 when the read fails. The
+ * read holds the schedule's read lock: its run, which names no app user,
+ * looks like a scheduled one, and the worker closes such runs as stopped
+ * only while it holds that lock.
  */
 async function read(verb: "import-groups" | "sync", id: number, command: string, io: Io): Promise<number> {
   const connection = await found(`No connection has the ID ${id}.`, () => connectionOr404(id));
   const actor = operator(command);
-  const run =
+  const run = await exclusive(SYNC_LOCK_ID, () =>
     verb === "import-groups"
-      ? await importGroups(connection, actor)
+      ? importGroups(connection, actor)
       : kindOf(connection) === AdapterKind.HR_SOURCE
-        ? await importPeople(connection, actor)
-        : await compareAccounts(connection, actor);
+        ? importPeople(connection, actor)
+        : compareAccounts(connection, actor),
+  );
+  if (run === null)
+    throw new AppError(409, "busy", "The worker is reading a connection. Try again in a minute.");
   const answer = runAnswer(run);
   io.out(json(answer));
   if (answer.ok) return 0;

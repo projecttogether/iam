@@ -8,8 +8,10 @@ import {
   auditEvents,
   connections,
   providerGroups,
+  syncRuns,
   type AuditEvent,
 } from "../db/schema";
+import { exclusive, SYNC_LOCK_ID } from "../engine/schedule";
 import { secretsOf } from "../engine/connections";
 import { apiKeyFrom, hashApiKey } from "../engine/identity-requests";
 import { logger } from "../logger";
@@ -330,6 +332,17 @@ describe("cli settings and cli tokens", () => {
     expect(JSON.parse(failed.out).ok).toBe(false);
     STORE.failWith = null;
     expect((await settings(["sync", "app"])).code).toBe(2);
+
+    // While the worker reads (and may close stopped runs), the command waits its turn.
+    const runs = (await getDb().select().from(syncRuns)).length;
+    const busy = await exclusive(SYNC_LOCK_ID, () =>
+      settings(["sync", "connections", "--id", String(connection.id)]),
+    );
+    expect(busy).toMatchObject({
+      code: 1,
+      err: "The worker is reading a connection. Try again in a minute.\n",
+    });
+    expect(await getDb().select().from(syncRuns)).toHaveLength(runs);
   });
 
   it("shows and saves Admin › Settings with the page's body and checks", async () => {

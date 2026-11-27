@@ -1,5 +1,8 @@
 import { profileInputSchema, teamInputSchema } from "@iam/shared/api/iam";
 import { PERSON_TYPE_LABELS } from "@iam/shared/labels";
+import { eq } from "drizzle-orm";
+import { accessProfiles, teams } from "../db/schema";
+import { q } from "../db/tx";
 import { operator } from "../engine/audit";
 import { AppError, parseWith } from "../http/errors";
 import {
@@ -30,6 +33,11 @@ async function found<T>(what: string, work: () => Promise<T>): Promise<T> {
     if (error instanceof AppError && error.code === "not_found") throw new AppError(404, "not_found", what);
     throw error;
   }
+}
+
+async function exists(table: typeof teams | typeof accessProfiles, id: number): Promise<boolean> {
+  const [row] = await q().select({ id: table.id }).from(table).where(eq(table.id, id));
+  return Boolean(row);
 }
 
 /** Lines of a table: the first column padded to the widest. */
@@ -119,7 +127,8 @@ export async function runTeams(args: string[], io: Io): Promise<number> {
         const id = idOption(parseArgs(rest, { positionals: 0, options: ["--id"] }), false);
         const actor = operator(`cli teams apply${id === undefined ? "" : ` --id ${id}`}`);
         const input = parseWith(teamInputSchema, await readJsonBody(io));
-        if (id !== undefined) await found(`No team has the ID ${id}.`, () => teamDetail(id));
+        if (id !== undefined && !(await exists(teams, id)))
+          throw new AppError(404, "not_found", `No team has the ID ${id}.`);
         const groups = await choosable();
         input.groupIds = input.groupIds.filter((groupId) => groups.has(groupId));
         const saved = await saveTeam(id ?? null, input, actor);
@@ -192,7 +201,8 @@ export async function runProfiles(args: string[], io: Io): Promise<number> {
         const id = idOption(parseArgs(rest, { positionals: 0, options: ["--id"] }), false);
         const actor = operator(`cli profiles apply${id === undefined ? "" : ` --id ${id}`}`);
         const input = parseWith(profileInputSchema, await readJsonBody(io));
-        if (id !== undefined) await found(`No access profile has the ID ${id}.`, () => profileDetail(id));
+        if (id !== undefined && !(await exists(accessProfiles, id)))
+          throw new AppError(404, "not_found", `No access profile has the ID ${id}.`);
         const groups = await choosable();
         for (const grant of input.grants)
           grant.groupIds = grant.groupIds.filter((groupId) => groups.has(groupId));
