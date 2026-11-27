@@ -473,16 +473,17 @@ export class GoogleWorkspaceAdapter extends Adapter {
   }
 
   /**
-   * The user's groups in each configured domain. Without an admin user, Google
-   * answers a listing by user with 404 unless it names a domain (and it takes
-   * no customer with a user).
+   * The user's groups. With an admin user one listing finds them all. Without
+   * one, Google answers a listing by user with 404 unless it names a domain
+   * (it takes no customer with a user), so the app lists them per domain.
    */
   override async accountGroups(account: ExternalAccount): Promise<Set<string>> {
     const found = new Set<string>();
-    for (const domain of this.domains) {
+    const domains: (string | null)[] = this.setting("admin_email") ? [null] : this.domains;
+    for (const domain of domains) {
       const groups = await this.pages("/groups", "groups", "list the user's groups", {
         userKey: account.externalId,
-        domain,
+        ...(domain === null ? {} : { domain }),
         maxResults: 200,
       });
       for (const group of groups) found.add(String(group.id));

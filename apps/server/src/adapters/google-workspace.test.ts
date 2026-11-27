@@ -142,6 +142,10 @@ class Directory {
   memberships: Record<string, Set<string>>;
   created: Record<string, unknown>[] = [];
   memberStatus: number | null = null;
+  /** Group ID -> its domain, for listings by user that name a domain. */
+  domains: Record<string, string> = {};
+  /** As Google without an admin user: a listing by user must name a domain. */
+  needsDomain = false;
   readonly handler: Handler = (request) => this.handle(request);
 
   constructor(users: GoogleUser[] = [], memberships: Record<string, Set<string>> = {}) {
@@ -160,11 +164,11 @@ class Directory {
     const params = request.url.searchParams;
     const key = () => path.split("/").slice(2).join("/");
     if (request.method === "GET" && path === "/groups" && params.has("userKey")) {
-      // As Google without an admin user: a listing by user names a domain.
-      if (!params.get("domain")) return json(404, {});
+      const domain = params.get("domain");
+      if (this.needsDomain && !domain) return json(404, {});
       const id = params.get("userKey")!;
       const groups = Object.entries(this.memberships)
-        .filter(([, members]) => members.has(id))
+        .filter(([group, members]) => members.has(id) && (!domain || this.domains[group] === domain))
         .map(([group]) => ({ id: group }));
       return json(200, { groups });
     }
@@ -619,6 +623,22 @@ describe("Google Workspace", () => {
     expect(directory.memberships.managed).toEqual(new Set());
     expect(directory.users.u1!.suspended).toBe(true);
     expect(result.account!.active).toBe(false);
+  });
+
+  it("lists a user's groups per domain without an admin user", async () => {
+    const directory = new Directory([user()], {
+      staff: new Set(["u1"]),
+      extern: new Set(["u1"]),
+      other: new Set(),
+    });
+    directory.domains = { staff: "example.invalid", extern: "extern.example.invalid" };
+    directory.needsDomain = true;
+    const adapter = makeAdapter(transport(directory.handler), {
+      admin_email: "",
+      domain: "example.invalid, extern.example.invalid",
+    });
+    const account = (await adapter.findAccount(spec(), "u1"))!;
+    expect(await adapter.accountGroups(account)).toEqual(new Set(["staff", "extern"]));
   });
 
   it("suspends even when the groups cannot be read", async () => {
